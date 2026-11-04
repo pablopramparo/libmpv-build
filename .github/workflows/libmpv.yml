@@ -38,7 +38,7 @@ jobs:
       - name: Build
         run: |
           git config --global --add safe.directory '*'
-          bash ./build-lgpl.sh
+          bash ./ci-libmpv-lgpl.sh
       - name: Collect logs
         if: always()
         run: 7z a logs.7z $(find build64 -type f -iname "*-*.log" -or -wholename "*/ffbuild/config.log")
