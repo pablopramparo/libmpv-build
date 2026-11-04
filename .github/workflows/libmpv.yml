@@ -1,0 +1,82 @@
+name: libmpv (LGPL, x86_64)
+
+# Our own build of libmpv-2.dll for Auren and Kyriot. LGPL-only (-Dgpl=false), see
+# compile-lgpl-libmpv.patch. Every run archives the exact source of every dependency that
+# went into the binary (sources.tar.zst + MANIFEST.txt) so the LGPL source offer never depends
+# on a third party's releases.
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub release with the binary and the corresponding source"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    container:
+      image: ghcr.io/archlinux/archlinux:base-devel
+    steps:
+      - name: Install dependencies
+        run: |
+          echo -e "[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+          pacman-key --init && pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed git ninja cmake meson clang lld libc++ unzip ragel yasm nasm gperf rst2pdf lib32-gcc-libs lib32-glib2 python-cairo curl wget mimalloc ccache python-pip 7zip shaderc zstd sudo
+          python -m pip install --break-system-packages roman
+          git config --global user.name "ci"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build
+        run: |
+          git config --global --add safe.directory '*'
+          bash ./build-lgpl.sh
+      - name: Collect logs
+        if: always()
+        run: 7z a logs.7z $(find build64 -type f -iname "*-*.log" -or -wholename "*/ffbuild/config.log")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: logs.7z
+      - name: Archive corresponding source
+        run: |
+          set -e
+          {
+            echo "libmpv build $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "build scripts: ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+            echo
+            for d in src_packages/*/; do
+              if [ -d "$d/.git" ]; then
+                echo "$(basename $d)  $(git -C $d remote get-url origin)  $(git -C $d rev-parse HEAD)"
+              else
+                echo "$(basename $d)  (tarball, no git metadata)"
+              fi
+            done
+          } > MANIFEST.txt
+          tar --exclude-vcs-ignores -I 'zstd -19 -T0' -cf sources.tar.zst src_packages MANIFEST.txt
+          sha256sum release/*.7z sources.tar.zst MANIFEST.txt > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libmpv-lgpl
+          path: |
+            release/*.7z
+            sources.tar.zst
+            MANIFEST.txt
+            SHA256SUMS.txt
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="libmpv-$(date -u +%Y%m%d)-$(git -C src_packages/mpv rev-parse --short=10 HEAD)"
+          gh release create "$tag" release/*.7z sources.tar.zst MANIFEST.txt SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "LGPL-only libmpv. sources.tar.zst is the corresponding source of every bundled dependency; MANIFEST.txt lists exact commits."
