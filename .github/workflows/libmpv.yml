@@ -47,28 +47,38 @@ jobs:
         with:
           name: logs
           path: logs.7z
+      - name: Checksums
+        run: sha256sum release/*.7z > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libmpv-lgpl-binary
+          path: |
+            release/*.7z
+            SHA256SUMS.txt
       - name: Archive corresponding source
         run: |
-          set -e
+          df -h . || true
           {
             echo "libmpv build $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "build scripts: ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
             echo
             for d in src_packages/*/; do
-              if [ -d "$d/.git" ]; then
-                echo "$(basename $d)  $(git -C $d remote get-url origin)  $(git -C $d rev-parse HEAD)"
+              if [ -e "$d/.git" ]; then
+                echo "$(basename $d)  $(git -C $d remote get-url origin 2>/dev/null)  $(git -C $d rev-parse HEAD 2>/dev/null)"
               else
-                echo "$(basename $d)  (tarball, no git metadata)"
+                echo "$(basename $d)  (no git metadata)"
               fi
             done
           } > MANIFEST.txt
-          tar --exclude-vcs-ignores -I 'zstd -19 -T0' -cf sources.tar.zst src_packages MANIFEST.txt
+          cat MANIFEST.txt
+          # Source trees without .git (exact commits are in MANIFEST.txt) to keep the archive small.
+          tar --exclude=.git -cf - src_packages MANIFEST.txt | zstd -10 -T0 -o sources.tar.zst
+          ls -l sources.tar.zst
           sha256sum release/*.7z sources.tar.zst MANIFEST.txt > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: libmpv-lgpl
+          name: libmpv-lgpl-source
           path: |
-            release/*.7z
             sources.tar.zst
             MANIFEST.txt
             SHA256SUMS.txt
