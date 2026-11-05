@@ -35,31 +35,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore build cache
+      - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
-          path: |
-            clang_root
-            install_rustup
-            src_packages
-            build64
-          key: libmpv-cache-${{ github.run_id }}
+          path: .ccache
+          key: libmpv-ccache-${{ github.run_id }}
           restore-keys: |
-            libmpv-cache-
+            libmpv-ccache-
       - name: Build
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 4G
         run: |
           git config --global --add safe.directory '*'
           bash ./ci-libmpv-lgpl.sh
-      - name: Save build cache
+      - name: Save ccache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: |
-            clang_root
-            install_rustup
-            src_packages
-            build64
-          key: libmpv-cache-${{ github.run_id }}
+          path: .ccache
+          key: libmpv-ccache-${{ github.run_id }}
       - name: Collect logs
         if: always()
         run: 7z a logs.7z $(find build64 -type f -iname "*-*.log" -or -wholename "*/ffbuild/config.log")
