@@ -24,3 +24,9 @@ ninja -C $bdir mpv
 
 mkdir -p release
 mv $bdir/mpv-dev-lgpl-* release/
+
+# The mpv target leaves a folder; pack it so the workflow has a single archive to publish.
+for d in release/mpv-dev-lgpl-*/; do
+  [ -d "$d" ] || continue
+  (cd release && 7z a -mx=9 "$(basename "$d").7z" "$(basename "$d")/*" >/dev/null)
+done
