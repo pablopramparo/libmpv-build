@@ -8,7 +8,12 @@ srcdir=$gitdir/src_packages
 bdir=$gitdir/build64
 arch=x86_64
 
-cmake -Wno-dev --fresh -DTARGET_ARCH=$arch-w64-mingw32 -DCOMPILER_TOOLCHAIN=clang \
+# VARIANT=audio builds the music-only FFmpeg (no video/hardware decoders, no encoders); anything else is the full build.
+variant=${VARIANT:-full}
+audio_only=OFF
+[ "$variant" = "audio" ] && audio_only=ON
+
+cmake -Wno-dev --fresh -DAUDIO_ONLY=$audio_only -DTARGET_ARCH=$arch-w64-mingw32 -DCOMPILER_TOOLCHAIN=clang \
   -DCMAKE_INSTALL_PREFIX=$clang_root -DMINGW_INSTALL_PREFIX=$bdir/install/$arch-w64-mingw32 \
   -DCLANG_PACKAGES_LTO=ON -DENABLE_CCACHE=ON -DSINGLE_SOURCE_LOCATION=$srcdir \
   -DRUSTUP_LOCATION=$gitdir/install_rustup -G Ninja -H$gitdir -B$bdir
@@ -24,6 +29,15 @@ ninja -C $bdir mpv
 
 mkdir -p release
 mv $bdir/mpv-dev-lgpl-* release/
+
+# Keep the audio variant apart from the full build in names and tags.
+if [ "$variant" = "audio" ]; then
+  for d in release/mpv-dev-lgpl-*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "${d%/}")
+    mv "${d%/}" "release/mpv-dev-lgpl-audio-${name#mpv-dev-lgpl-}"
+  done
+fi
 
 # The mpv target leaves a folder; pack it so the workflow has a single archive to publish.
 for d in release/mpv-dev-lgpl-*/; do

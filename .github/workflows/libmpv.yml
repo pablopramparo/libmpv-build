@@ -15,6 +15,13 @@ on:
         description: "Publish a GitHub release with the binary and the corresponding source"
         type: boolean
         default: false
+      variant:
+        description: "full = every codec (Auren); audio = music only, no video or hardware decoders (Kyriot)"
+        type: choice
+        options:
+          - full
+          - audio
+        default: full
 
 jobs:
   build:
@@ -46,6 +53,7 @@ jobs:
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 4G
+          VARIANT: ${{ inputs.variant }}
         run: |
           git config --global --add safe.directory '*'
           bash ./ci-libmpv-lgpl.sh
@@ -103,6 +111,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="libmpv-$(date -u +%Y%m%d)-$(git -C src_packages/mpv rev-parse --short=10 HEAD)"
+          prefix=libmpv
+          [ "${{ inputs.variant }}" = "audio" ] && prefix=libmpv-audio
+          tag="$prefix-$(date -u +%Y%m%d)-$(git -C src_packages/mpv rev-parse --short=10 HEAD)"
           gh release create "$tag" release/*.7z sources.tar.zst MANIFEST.txt SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "LGPL-only libmpv. sources.tar.zst is the corresponding source of every bundled dependency; MANIFEST.txt lists exact commits."
